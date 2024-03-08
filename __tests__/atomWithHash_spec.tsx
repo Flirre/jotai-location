@@ -186,6 +186,53 @@ describe('atomWithHash', () => {
     await user.type(screen.getByLabelText('b'), '1');
     await waitFor(() => expect(paramBMockFn).toBeCalledTimes(4));
   });
+
+  it('can override setHash, for single calls', async () => {
+    const countAtom = atomWithHash('count', 1);
+    const Counter = () => {
+      const [count, setCount] = useAtom(countAtom);
+      return (
+        <>
+          <div>count: {count}</div>
+          <button type="button" onClick={() => setCount((c) => c + 1)}>
+            button
+          </button>
+          <button
+            type="button"
+            onClick={() => setCount((c) => c + 1, { setHash: 'replaceState' })}
+          >
+            button2
+          </button>
+        </>
+      );
+    };
+
+    const { findByText, getByText } = render(
+      <StrictMode>
+        <Counter />
+      </StrictMode>,
+    );
+
+    window.history.pushState(null, '', '/?q=foo');
+
+    fireEvent.click(getByText('button'));
+    await findByText('count: 2');
+    expect(window.location.pathname).toEqual('/');
+    expect(window.location.search).toEqual('?q=foo');
+    expect(window.location.hash).toEqual('#count=2');
+
+    window.history.pushState(null, '', '/another');
+    await waitFor(() => {
+      expect(window.location.pathname).toEqual('/another');
+    });
+
+    window.history.back();
+    await waitFor(() => {
+      expect(window.location.pathname).toEqual('/');
+      expect(window.location.search).toEqual('?q=foo');
+      expect(window.location.hash).toEqual('#count=2');
+    });
+  });
 });
 
 describe('atomWithHash without window', () => {

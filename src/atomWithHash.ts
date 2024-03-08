@@ -15,16 +15,24 @@ const safeJSONParse = (initialValue: unknown) => (str: string) => {
   }
 };
 
+type AtomOptions<T> = Pick<Options<T>, 'setHash'>;
+
+type Options<T> = {
+  serialize?: (val: T) => string;
+  deserialize?: (str: string) => T;
+  subscribe?: (callback: () => void) => () => void;
+  setHash?: 'default' | 'replaceState' | ((searchParams: string) => void);
+};
+
 export function atomWithHash<Value>(
   key: string,
   initialValue: Value,
-  options?: {
-    serialize?: (val: Value) => string;
-    deserialize?: (str: string) => Value;
-    subscribe?: (callback: () => void) => () => void;
-    setHash?: 'default' | 'replaceState' | ((searchParams: string) => void);
-  },
-): WritableAtom<Value, [SetStateActionWithReset<Value>], void> {
+  options?: Options<Value>,
+): WritableAtom<
+  Value,
+  [SetStateActionWithReset<Value>, AtomOptions<Value>?],
+  void
+> {
   const serialize = options?.serialize || JSON.stringify;
   const deserialize = options?.deserialize || safeJSONParse(initialValue);
   const subscribe =
@@ -71,7 +79,29 @@ export function atomWithHash<Value>(
   });
   return atom(
     (get) => get(valueAtom),
-    (get, set, update: SetStateActionWithReset<Value>) => {
+    (
+      get,
+      set,
+      update: SetStateActionWithReset<Value>,
+      atomOptions: AtomOptions<Value> = {},
+    ) => {
+      if (atomOptions.setHash) {
+        setHash = (searchParams: string) => {
+          window.location.hash = searchParams;
+        };
+        if (setHashOption === 'replaceState') {
+          setHash = (searchParams) => {
+            window.history.replaceState(
+              window.history.state,
+              '',
+              `${window.location.pathname}${window.location.search}#${searchParams}`,
+            );
+          };
+        }
+        if (typeof setHashOption === 'function') {
+          setHash = setHashOption;
+        }
+      }
       const nextValue =
         typeof update === 'function'
           ? (update as (prev: Value) => Value | typeof RESET)(get(valueAtom))
@@ -85,6 +115,8 @@ export function atomWithHash<Value>(
         set(strAtom, str);
         searchParams.set(key, str);
       }
+      console.log('setHash');
+
       setHash(searchParams.toString());
     },
   );
